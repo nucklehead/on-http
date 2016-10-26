@@ -9,13 +9,13 @@ describe('Redfish Managers', function () {
     var redfish;
     var waterline;
     var Promise;
-    var template;
+    var view;
     var fs;
     var Errors;
 
     // Skip reading the entry from Mongo and return the entry directly
     function redirectGet(entry) {
-        return fs.readFileAsync(__dirname + '/../../../../data/templates/' + entry, 'utf-8')
+        return fs.readFileAsync(__dirname + '/../../../../data/views/redfish-1.0/' + entry, 'utf-8')
             .then(function(contents) {
                 return { contents: contents };
             });
@@ -24,8 +24,8 @@ describe('Redfish Managers', function () {
     before('start HTTP server', function () {
         this.timeout(5000);
         return helper.startServer([]).then(function () {
-            template = helper.injector.get('Templates');
-            sinon.stub(template, "get", redirectGet);
+            view = helper.injector.get('Views');
+            sinon.stub(view, "get", redirectGet);
 
             redfish = helper.injector.get('Http.Api.Services.Redfish');
             sinon.spy(redfish, 'render');
@@ -69,7 +69,13 @@ describe('Redfish Managers', function () {
             id: '1234abcd1234abcd1234abcd',
             name: '1234abcd1234abcd1234abcd'
         }));
+        waterline.nodes.getNodeById.withArgs('1234abcd1234abcd1234abcd')
+        .resolves(Promise.resolve({
+            id: '1234abcd1234abcd1234abcd',
+            name: '1234abcd1234abcd1234abcd'
+        }));
         waterline.nodes.needByIdentifier.rejects(new Errors.NotFoundError('Not Found'));
+        waterline.nodes.getNodeById.resolves([]);
         waterline.catalogs.findLatestCatalogOfSource.rejects(new Errors.NotFoundError());
     });
 
@@ -80,7 +86,7 @@ describe('Redfish Managers', function () {
     after('stop HTTP server', function () {
         validator.validate.restore();
         redfish.render.restore();
-        template.get.restore();
+        view.get.restore();
         
         function restoreStubs(obj) {
             _(obj).methods().forEach(function (method) {
@@ -99,16 +105,16 @@ describe('Redfish Managers', function () {
         id: '1234abcd1234abcd1234abcd',
         name: 'name',
         type: 'compute',
-        obmSettings: [
-            {
-                service: 'ipmi-obm-service',
-                config: {
-                    host: '1.2.3.4',
-                    user: 'myuser',
-                    password: 'mypass'
-                }
-            }
-        ],
+        obms: [{
+            id: "574dcd5794ab6e2506fd107a",
+            node: "1234abcd1234abcd1234abcd",
+            service: 'ipmi-obm-service',
+            config: {
+                host: '1.2.3.4',
+                user: 'myuser',
+                password: 'mypass'
+           }
+        }],
         relations: [
             {
                 relationType: 'enclosedBy',
@@ -143,6 +149,7 @@ describe('Redfish Managers', function () {
 
     it('should return a valid manager', function() {
         waterline.nodes.needByIdentifier.withArgs('1234abcd1234abcd1234abcd').resolves(node);
+        waterline.nodes.getNodeById.withArgs('1234abcd1234abcd1234abcd').resolves(node);
         waterline.catalogs.findLatestCatalogOfSource.resolves(Promise.resolve({
             node: '1234abcd1234abcd1234abcd',
             source: 'dummysource',
@@ -167,6 +174,7 @@ describe('Redfish Managers', function () {
 
     it('should return a valid manager ethernet interface collection', function() {
         waterline.nodes.needByIdentifier.withArgs('1234abcd1234abcd1234abcd').resolves(node);
+        waterline.nodes.getNodeById.withArgs('1234abcd1234abcd1234abcd').resolves(node);
         waterline.catalogs.findLatestCatalogOfSource.resolves(Promise.resolve({
             node: '1234abcd1234abcd1234abcd',
             source: 'dummysource',
@@ -191,6 +199,7 @@ describe('Redfish Managers', function () {
 
     it('should return a valid manager ethernet interface', function() {
         waterline.nodes.needByIdentifier.withArgs('1234abcd1234abcd1234abcd').resolves(node);
+        waterline.nodes.getNodeById.withArgs('1234abcd1234abcd1234abcd').resolves(node);
         waterline.catalogs.findLatestCatalogOfSource.resolves(Promise.resolve({
             node: '1234abcd1234abcd1234abcd',
             source: 'dummysource',

@@ -60,6 +60,11 @@ describe('Http.Api.Users', function () {
         this.sandbox.reset();
     });
 
+    after('stop HTTP server', function () {
+        this.sandbox.restore();
+        return helper.stopServer();
+    });
+
     it('should 201 a user post attempt with localexception', function() {
         accountService.listUsers.resolves([]);
         accountService.createUser.resolves(userObj);
@@ -139,14 +144,37 @@ describe('Http.Api.Users', function () {
             }).then(function(token) {
                 return helper.request().patch('/api/2.0/users/admin')
                     .set("authorization", 'JWT ' + token)
-                    .send({password: 'admin456'})
+                    .send({password: 'admin456', role: 'Administrator'})
                     .expect('Content-Type', /^application\/json/)
                     .expect(200)
                     .then(function() {
                         expect(accountService.getUserByName)
                             .to.have.been.calledWith('admin');
                         expect(accountService.modifyUserByName)
-                            .to.have.been.calledWith('admin', {password:'admin456'});
+                            .to.have.been.calledWith('admin', {password:'admin456', role: 'Administrator'});
+                    });
+            });
+    });
+
+    it('should 400 a less privileged user modification attempt with auth tokens', function() {
+        accountService.getUserByName.resolves(readOnlyObj);
+        accountService.modifyUserByName.resolves(readOnlyObj);
+        return helper.request().post('/login')
+            .send({username: "readonly", password: "read123"})
+            .expect(200)
+            .then(function(res) {
+                return res.body.token;
+            }).then(function(token) {
+                return helper.request().patch('/api/2.0/users/readonly')
+                    .set("authorization", 'JWT ' + token)
+                    .send({password: 'admin456', role: 'Administrator'})
+                    .expect('Content-Type', /^application\/json/)
+                    .expect(400)
+                    .then(function() {
+                        expect(accountService.getUserByName)
+                            .to.have.been.calledWith('readonly');
+                        expect(accountService.modifyUserByName)
+                            .to.not.have.been.called;
                     });
             });
     });
@@ -241,7 +269,7 @@ describe('Http.Api.Users', function () {
             });
     });
 
-    it('should 200 a user delete with auth tokens', function() {
+    it('should 204 a user delete with auth tokens', function() {
         accountService.removeUserByName.resolves({username: 'admin'});
         return helper.request().post('/login')
             .send({username: "admin", password: "admin123"})
@@ -251,8 +279,7 @@ describe('Http.Api.Users', function () {
             }).then(function(token) {
                 return helper.request().delete('/api/2.0/users/admin')
                     .set("authorization", 'JWT ' + token)
-                    .expect('Content-Type', /^application\/json/)
-                    .expect(200)
+                    .expect(204)
                     .then(function() {
                         expect(accountService.removeUserByName).to.have.been.calledWith('admin');
                     });
@@ -271,10 +298,4 @@ describe('Http.Api.Users', function () {
                     .expect(401);
             });
     });
-
-    after('stop HTTP server', function () {
-        this.sandbox.restore();
-        return helper.stopServer();
-    });
-
 });

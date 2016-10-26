@@ -5,8 +5,7 @@
 var _ = require('lodash'),  /* jshint ignore: line */
     _di = require('di'),
     onCore = require('on-core'),
-    onTasks = require('on-tasks'),
-    ws = require('ws');
+    onTasks = require('on-tasks');
 
 var self = module.exports = {
     injector: null,
@@ -45,7 +44,8 @@ function onHttpContextFactory(di, directory) {
             helper.requireWrapper('rimraf', 'rimraf', undefined, __dirname),
             helper.requireWrapper('os-tmpdir', 'osTmpdir', undefined, __dirname),
             helper.requireWrapper('fs-extra', 'fs', undefined, __dirname),
-            helper.requireWrapper('os', 'os', undefined, __dirname)
+            helper.requireWrapper('os', 'os', undefined, __dirname),
+            helper.requireWrapper('node-cache', 'node-cache', undefined, __dirname)
         ]),
 
         prerequisiteInjectables: _.flattenDeep([

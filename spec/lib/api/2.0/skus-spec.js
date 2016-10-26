@@ -6,7 +6,6 @@
 describe('Http.Api.Skus.2.0', function() {
     var waterline;
     var workflowApiService;
-    var nodeApiService;
     var Promise;
     var Constants;
     var Errors;
@@ -19,17 +18,26 @@ describe('Http.Api.Skus.2.0', function() {
             waterline = helper.injector.get('Services.Waterline');
             sinon.stub(waterline.skus);
             workflowApiService = helper.injector.get('Http.Services.Api.Workflows');
-            nodeApiService = helper.injector.get('Http.Services.Api.Nodes');
-            sinon.stub(nodeApiService);
+
             skuApiService = helper.injector.get('Http.Services.SkuPack');
             Promise = helper.injector.get('Promise');
             Constants = helper.injector.get('Constants');
             Errors = helper.injector.get('Errors');
-        });
 
+            sinon.stub(skuApiService, 'getSkus');
+            sinon.stub(skuApiService, 'postSku');
+            sinon.stub(skuApiService, 'getSkusById');
+            sinon.stub(skuApiService, 'upsertSku');
+            sinon.stub(skuApiService, 'patchSku');
+            sinon.stub(skuApiService, 'getNodesSkusById');
+            sinon.stub(skuApiService, 'regenerateSkus');
+            sinon.stub(skuApiService, 'deleteSkuById');
+
+            sinon.stub(workflowApiService, 'createAndRunGraph');
+        });
     });
 
-    beforeEach('reset stubs', function () {
+    afterEach('reset stubs', function () {
         function resetStubs(obj) {
             _(obj).methods().forEach(function (method) {
                 if (obj[method] && obj[method].reset) {
@@ -39,10 +47,19 @@ describe('Http.Api.Skus.2.0', function() {
         }
         resetStubs(waterline.skus);
         resetStubs(workflowApiService);
-
     });
 
     after('stop HTTP server', function () {
+        skuApiService.getSkus.restore();
+        skuApiService.postSku.restore();
+        skuApiService.getSkusById.restore();
+        skuApiService.upsertSku.restore();
+        skuApiService.patchSku.restore();
+        skuApiService.regenerateSkus.restore();
+        skuApiService.getNodesSkusById.restore();
+        skuApiService.deleteSkuById.restore();
+        workflowApiService.createAndRunGraph.restore();
+
         return helper.stopServer();
     });
 
@@ -68,7 +85,7 @@ describe('Http.Api.Skus.2.0', function() {
         sku: '0987'
     };
 
-    var input = {
+    var record = {
         name: 'my test sku',
         rules: [
             {
@@ -85,31 +102,6 @@ describe('Http.Api.Skus.2.0', function() {
         id: '0987'
     };
 
-    beforeEach(function() {
-        sinon.stub(skuApiService, 'getSkus');
-        sinon.stub(skuApiService, 'postSku');
-        sinon.stub(skuApiService, 'getSkusById');
-        sinon.stub(skuApiService, 'upsertSku');
-        sinon.stub(skuApiService, 'patchSku');
-        sinon.stub(skuApiService, 'getNodesSkusById');
-        sinon.stub(skuApiService, 'regenerateSkus');
-        sinon.stub(skuApiService, 'deleteSkuById');
-
-        sinon.stub(workflowApiService, 'createAndRunGraph');
-    });
-
-    afterEach(function() {
-        skuApiService.getSkus.restore();
-        skuApiService.postSku.restore();
-        skuApiService.getSkusById.restore();
-        skuApiService.upsertSku.restore();
-        skuApiService.patchSku.restore();
-        skuApiService.regenerateSkus.restore();
-        skuApiService.getNodesSkusById.restore();
-        skuApiService.deleteSkuById.restore();
-        workflowApiService.createAndRunGraph.restore();
-    });
-
     it('should return an empty array from GET /skus', function () {
         skuApiService.getSkus.resolves([]);
         return helper.request().get('/api/2.0/skus')
@@ -124,49 +116,57 @@ describe('Http.Api.Skus.2.0', function() {
         var sku;
 
         it('should create a sku', function(){
-            skuApiService.postSku.resolves(input);
+            skuApiService.postSku.resolves(_.assign({}, record));
             return helper.request().post('/api/2.0/skus')
-                .send(input)
+                .send(_.omit(record, 'id'))
                 .expect('Content-Type', /^application\/json/)
                 .expect(201)
                 .then(function (req) {
                     sku = req.body;
-                    expect(sku).to.have.property('name').that.equals(input.name);
-                    expect(sku).to.have.property('rules').that.deep.equals(input.rules);
+                    expect(sku).to.have.property('name').that.equals(record.name);
+                    expect(sku).to.have.property('rules').that.deep.equals(record.rules);
                     expect(sku).to.have.property('discoveryGraphName')
-                        .that.equals(input.discoveryGraphName);
+                        .that.equals(record.discoveryGraphName);
                     expect(sku).to.have.property('discoveryGraphOptions')
-                        .that.deep.equals(input.discoveryGraphOptions);
+                        .that.deep.equals(record.discoveryGraphOptions);
                 });
         });
 
         it('should contain the new sku in GET /skus', function () {
-            skuApiService.getSkus.resolves([input]);
+            skuApiService.getSkus.resolves([_.assign({}, record)]);
             return helper.request().get('/api/2.0/skus')
                 .expect('Content-Type', /^application\/json/)
-                .expect(200, [sku])
-                .then(function () {
+                .expect(200)
+                .then(function (res) {
                     expect(skuApiService.getSkus).to.have.been.called;
+                    var checkSku = res.body;
+                    expect(res.body).to.have.lengthOf(1);
+                    expect(res.body[0]).to.have.property('name').that.equals(record.name);
+                    expect(res.body[0]).to.have.property('rules').that.deep.equals(record.rules);
+                    expect(res.body[0]).to.have.property('discoveryGraphName')
+                        .that.equals(record.discoveryGraphName);
+                    expect(res.body[0]).to.have.property('discoveryGraphOptions')
+                        .that.deep.equals(record.discoveryGraphOptions);
             });
         });
 
         it('should return the same sku from GET /skus/:id', function () {
-            skuApiService.getSkusById.resolves(input);
+            skuApiService.getSkusById.resolves(_.assign({}, record));
             return helper.request().get('/api/2.0/skus/' + sku.id)
                 .expect('Content-Type', /^application\/json/)
                 .expect(200)
                 .then(function (res) {
                     expect(skuApiService.getSkusById).to.have.been.called;
                     var checkSku = res.body;
-                    expect(checkSku).to.have.property('name').that.equals(input.name);
+                    expect(checkSku).to.have.property('name').that.equals(record.name);
                 });
         });
 
-        it('should 200 reputting the same sku', function() {
-            skuApiService.upsertSku.resolves(input);
+        it('should 201 reputting the same sku', function() {
+            skuApiService.upsertSku.resolves(_.assign({}, record));
             return helper.request().put('/api/2.0/skus')
-                .send(input)
-                .expect(200)
+                .send(_.omit(record, 'id'))
+                .expect(201)
                 .then(function () {
                     expect(skuApiService.upsertSku).to.have.been.called;
                 });
@@ -199,7 +199,7 @@ describe('Http.Api.Skus.2.0', function() {
                 sku.name = 'updated sku name';
                 skuApiService.patchSku.resolves(updatedInput);
                 return helper.request().patch('/api/2.0/skus/0987')
-                    .send(input)
+                    .send(_.omit(record, 'id'))
                     .expect('Content-Type', /^application\/json/)
                     .expect(200)
                     .then(function (res) {
@@ -230,7 +230,7 @@ describe('Http.Api.Skus.2.0', function() {
             beforeEach('DELETE /skus/:id', function () {
                 skuApiService.deleteSkuById.resolves();
                 return helper.request().delete('/api/2.0/skus/' + sku.id)
-                    .expect(200)
+                    .expect(204)
                     .then(function () {
                         expect(skuApiService.deleteSkuById).to.have.been.called;
                     });
