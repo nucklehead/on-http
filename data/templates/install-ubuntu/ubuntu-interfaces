@@ -1,29 +1,40 @@
+#!/bin/ash
+
+echo "" > /etc/network/interfaces
+<%_ var macRegex = /(..:*){6}/i; _%>
 <%_ if (typeof networkDevices !== 'undefined' && networkDevices.length > 0) { _%>
 <%_ networkDevices.forEach(function(n) { _%>
+interface=<%=n.device%>
+    <%_ if (n.device.search(macRegex) == 0){ _%>
+interface=`grep -i /sys/class/net/*/address -e  $interface | cut -d "/" -f 5`
+    <%_ } _%>
     <%_ for (p in n) { _%>
         <%_ ip = n[p]; _%>
-        <%_ if (['ipv4', 'ipv6'].indexOf(p) === -1 || undefined == ip) continue; _%>
+        <%_ if (['ipv4', 'ipv6'].indexOf(p) !== -1 && undefined != ip) {_%>
         <%_ if (undefined !== ip.vlanIds) { _%>
             <%_ ip.vlanIds.forEach(function(vid) { _%>
-auto <%=n.device%>.<%=vid%>
-iface <%=n.device%>.<%=vid%> inet static
-address <%=ip.ipAddr%>
-netmask <%=ip.netmask%>
-gateway <%=ip.gateway%>
+echo "auto $interface.<%=vid%>" >> /etc/network/interfaces
+echo "iface $interface.<%=vid%> inet static" >> /etc/network/interfaces
+echo "address <%=ip.ipAddr%>" >> /etc/network/interfaces
+echo "netmask <%=ip.netmask%>" >> /etc/network/interfaces
+echo "gateway <%=ip.gateway%>" >> /etc/network/interfaces
 
             <%_ }); _%>
         <%_ } else { _%>
-auto <%=n.device%>
-iface <%=n.device%> inet static
-address <%=ip.ipAddr%>
-netmask <%=ip.netmask%>
-gateway <%=ip.gateway%>
-
+echo "auto $interface" >> /etc/network/interfaces
+echo "iface $interface inet static" >> /etc/network/interfaces
+echo "address <%=ip.ipAddr%>" >> /etc/network/interfaces
+echo "netmask <%=ip.netmask%>" >> /etc/network/interfaces
+echo "gateway <%=ip.gateway%>" >> /etc/network/interfaces
+        <%_ } _%>
+        <%_ } else { _%>
+echo "auto $interface" >> /etc/network/interfaces
+echo "iface $interface inet dhcp" >> /etc/network/interfaces
         <%_ } _%>
     <%_ } _%>
 <%_ }); _%>
 <%_ } _%>
 
 <% if (typeof dnsServers !== 'undefined' && dnsServers.length > 0) { -%>
-dns-nameservers <%=dnsServers.join(' ')%>
+echo "dns-nameservers <%=dnsServers.join(' ')%>" >> /etc/network/interfaces
 <% } -%>
